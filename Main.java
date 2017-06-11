@@ -5,12 +5,8 @@ import java.io.PrintStream;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class Main
-{
-  public Main() {}
-  
-  public static void main(String[] paramArrayOfString) throws java.io.IOException
-  {
+public class Main{
+  public static void main(String[] paramArrayOfString) throws java.io.IOException{
     if (paramArrayOfString.length < 3) {
       System.out.println("Find pattern format at:");
       System.out.println("https://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html#matcher(java.lang.CharSequence)");
@@ -27,9 +23,8 @@ public class Main
       System.out.println(ToolRC(paramArrayOfString[0], paramArrayOfString[1], paramArrayOfString[2]));
     }
   }
-  
   public static int ToolRC(String paramString1, String paramString2, File[] paramArrayOfFile) throws java.io.IOException, java.io.FileNotFoundException { BufferedReader localBufferedReader = new BufferedReader(new java.io.FileReader(paramArrayOfFile[0]));
-    java.util.ArrayList localArrayList = new java.util.ArrayList();
+    java.util.ArrayList<String> localArrayList = new java.util.ArrayList<String>();
     String str1 = "";
     Pattern localPattern = Pattern.compile(paramString1);
     int i = 0;
@@ -50,13 +45,11 @@ public class Main
     ((BufferedWriter)localObject).close();
     return i;
   }
-  
   public static String ToolRC(String paramString1, String paramString2, String paramString3) { Pattern localPattern = Pattern.compile(paramString1);
     Matcher localMatcher = localPattern.matcher(paramString3);
     return localMatcher.replaceAll(paramString2);
   }
-  
   private static String getInput(String paramString) { System.out.print(paramString);
-    return new java.util.Scanner(System.in).next();
+    return new java.util.Scanner(System.in).nextLine();
   }
 }
