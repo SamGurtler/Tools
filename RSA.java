@@ -16,8 +16,8 @@ public class RSA{
 	public static void main(String[] args)throws InterruptedException{
 		if(args.length<1){
 			getHelp();
-			(new Thread(new menu(getInput("\nOption:").split(",")))).start();
-		}else(new Thread(new menu(args[0].split(",")))).start();
+			(new Thread(new menu(getInput("\nOption:").split(" (?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)",-1)))).start();
+		}else(new Thread(new menu(args[0].split(" (?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)",-1)))).start();
 	}
 	private static class menu implements Runnable{
 		private static String[] args;
@@ -37,7 +37,7 @@ public class RSA{
 					}
 				}else if(args[0].toLowerCase().contains("en")){
 					for(int x=2;x<args.length;x++){
-						threads.add(new Thread(new CryptoMethod(args,x)));
+						threads.add(new Thread(new CryptoMethod(args,x,true)));
 						threads.get(threads.size()-1).run();
 						try {
 							threads.get(threads.size()-1).join();
@@ -47,7 +47,7 @@ public class RSA{
 					}
 				}else if(args[0].toLowerCase().contains("de")){
 					for(int x=2;x<args.length;x++){
-						threads.add(new Thread(new CryptoMethod(args,x)));
+						threads.add(new Thread(new CryptoMethod(args,x,false)));
 						threads.get(threads.size()-1).run();
 						try {
 							threads.get(threads.size()-1).join();
@@ -57,55 +57,85 @@ public class RSA{
 					}
 				}else if(args[0].toLowerCase().contains("quit"))quit=true;
 				else getHelp();
-				if(!quit)args=getInput("\nOption:").split(",");
+				if(!quit)args=getInput("\nOption:").split(" (?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)",-1);
 			}
 		}
 	}
 	private static class CryptoMethod implements Runnable{
 		private static String[] args;
 		private static int x;
-		public CryptoMethod(String[]args,int x){
-			this.args=args;	
+		private static boolean en;
+		public CryptoMethod(String[]args,int x,boolean en){
+			this.args=args;
 			this.x=x;
+			this.en=en;
 		}
 		public void run(){
 			try{
 				ArrayList<String> fileStorage=new ArrayList<String>();
 				String line;
 				BufferedReader reader=new BufferedReader(new FileReader(args[x]));
-				while((line=reader.readLine())!=null)fileStorage.add(encrypt(line,args[1],nums[2].toString()));
+				while((line=reader.readLine())!=null) {
+					String[] info = (en)?encrypt(line,args[1],nums[2].toString()):new String[]{decrypt(line.split("-"),args[1],nums[2].toString())};
+					for(String data:info)
+					fileStorage.add(data);
+				}
 				reader.close();
 				BufferedWriter writer=new BufferedWriter(new FileWriter(args[x]));
-				for(int y=0;y<fileStorage.size();y++)writer.write(fileStorage.get(y));
-				writer.close();
+				for(int y=0;y<fileStorage.size();y++)writer.write(fileStorage.get(y)+'-');
+				writer. close();
 			}catch(IOException e){
-				System.out.println(encrypt(args[x],args[1],nums[2].toString()));
-			} 
+				if(en){
+					for(int count=0;count<args[x].length();count++){
+						System.out.print(encrypt(args[x].charAt(count),args[1],nums[2].toString()));
+						if(count<args[x].length()-1)System.out.print('-');
+					}
+				}
+				else System.out.print(decrypt(args[x],args[1],nums[2].toString()));
+			}
 		}
 	}
 	private static class MakeKeys extends Thread{
 		public void run(){
-			BigInteger publicKey=(new BigInteger(/*totient*/nums[3].bitLength(),new SecureRandom())).abs();
-			while((publicKey.compareTo(/*totient*/nums[3])>=0||publicKey.compareTo(BigInteger.ONE)<=0)||!coPrime(/*totient*/nums[3],publicKey))publicKey=(new BigInteger(/*totient*/nums[3].bitLength(),(new SecureRandom()))).abs();
+			BigInteger publicKey=(new BigInteger(nums[3].bitLength(),new SecureRandom())).abs();
+			while(check(publicKey))publicKey=(new BigInteger(nums[3].bitLength(),(new SecureRandom()))).abs();
 			System.out.print("Public Key:"+publicKey.toString());
-			BigInteger privateKey= publicKey.modInverse(/*totient*/nums[3]);
-			System.out.print(" Private Key:"+privateKey.toString()/*+" Modulus:"+modulus*/);
+			BigInteger privateKey= publicKey.modInverse(nums[3]);
+			while(check(privateKey))publicKey.modInverse(nums[3]);
+			System.out.print(" Private Key:"+privateKey.toString());
+		}
+		private boolean check(BigInteger num){
+			return (num.compareTo(nums[3])>=0||num.compareTo(BigInteger.ONE)<=0)||!coPrime(nums[3],num);
 		}
 	}
  	private static boolean coPrime(BigInteger a,BigInteger b){
     	return a.gcd(b).equals(BigInteger.ONE);
 	}
-	private static String encrypt(String msg,String publicKey,String modulus){
-		return (new BigInteger(msg.getBytes())).modPow(new BigInteger(publicKey),new BigInteger(modulus)).toString();
+ 	private static String[] encrypt(String msg,String publicKey,String modulus){
+		String[] cipher=new String[msg.length()];
+		for(int x=0;msg.length()>x;x++){
+			cipher[x] = encrypt(msg.charAt(x),publicKey,modulus);
+		}
+		return cipher;
 	}
-	private static String decrypt(String cipher,String privateKey,String modulus){
-		return new String(new BigInteger(cipher).modPow(new BigInteger(privateKey),new BigInteger(modulus)).toByteArray());
+	private static String encrypt(char msg,String publicKey,String modulus){
+		return (new BigInteger(String.valueOf(msg).getBytes())).modPow(new BigInteger(publicKey),new BigInteger(modulus)).toString();
+	}
+	private static String decrypt(String[]cipher,String privateKey,String modulus){
+		for(int x=1;cipher.length>x;x++){
+			cipher[0]+=decrypt(cipher[x],privateKey,modulus);
+		}
+		return cipher[0];
+	}
+	private static char decrypt(String cipher,String privateKey,String modulus){
+		return new String(new BigInteger(cipher).modPow(new BigInteger(privateKey),new BigInteger(modulus)).toByteArray()).charAt(0);
 	}	
 	private static String getInput(String quote){
 		System.out.print(quote);
 		return (new Scanner(System.in)).nextLine();
 	}
 	private static void getHelp(){
+		System.out.println("Separate all input arguments with spaces.");
 		System.out.println("Enter any of the following:\nEn for to encrypt(with public key first),");
 		System.out.print("De to decrypt(with private key first),\nOr Keys for new keys");
 		System.out.print(";followed by String or File's path names that will be used.");
