@@ -4,11 +4,22 @@ import java.util.ArrayList;
 import java.util.Scanner;
 import java.math.BigInteger;
 import java.lang.InterruptedException;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.FileInputStream;
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.util.zip.ZipOutputStream;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 public class RSA{
 	private static ArrayList<Thread> threads=new ArrayList<Thread>();
 	private static final BigInteger[] nums={new BigInteger("15805993460899067323"),new BigInteger("9382304296585360981"),
@@ -16,13 +27,13 @@ public class RSA{
 	public static void main(String[] args)throws InterruptedException{
 		if(args.length<1){
 			getHelp();
-			(new Thread(new menu(getInput("\nOption:").split(" (?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)",-1)))).start();
-		}else(new Thread(new menu(args[0].split(" (?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)",-1)))).start();
+			(new Thread(new menu(getInput("\nOption:").split(" (?=(?:[^\"]*\"([^\"]*)\")*[^\"]*$)",-1)))).start();
+		}else(new Thread(new menu(args[0].split(" (?=(?:[^\"]*\"([^\"]*)\")*[^\"]*$)",-1)))).start();
 	}
 	private static class menu implements Runnable{
 		private static String[] args;
 		public menu(String[] args){
-			this.args=args;
+			this.args=ghettofix(args);
 		}
 		public void run(){
 			boolean quit=false;
@@ -57,8 +68,16 @@ public class RSA{
 					}
 				}else if(args[0].toLowerCase().contains("quit"))quit=true;
 				else getHelp();
-				if(!quit)args=getInput("\nOption:").split(" (?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)",-1);
+				if(!quit)args=ghettofix(getInput("Option:").split(" (?=(?:[^\"]*\"([^\"]*)\")*[^\"]*$)",-1));
 			}
+		}
+		private static String[] ghettofix(String[] args){
+			for(int count=0;count<args.length;count++){
+				if(args[count].charAt(0)=='"'&& args[count].charAt(args[count].length()-1)=='"'){
+					args[count]=args[count].substring(1,args[count].length()-1);
+				}
+			}
+			return args;
 		}
 	}
 	private static class CryptoMethod implements Runnable{
@@ -74,24 +93,30 @@ public class RSA{
 			try{
 				ArrayList<String> fileStorage=new ArrayList<String>();
 				String line;
-				BufferedReader reader=new BufferedReader(new FileReader(args[x]));
+				BufferedReader reader=new BufferedReader(/*(en)?*/new FileReader(args[x])/*:new InputStreamReader(new ZipInputStream(new BufferedInputStream(new FileInputStream(args[x]))))*/);
 				while((line=reader.readLine())!=null) {
 					String[] info = (en)?encrypt(line,args[1],nums[2].toString()):new String[]{decrypt(line.split("-"),args[1],nums[2].toString())};
-					for(String data:info)
-					fileStorage.add(data);
+					for(String data:info)fileStorage.add(data);
+					fileStorage.add("ln");
 				}
 				reader.close();
-				BufferedWriter writer=new BufferedWriter(new FileWriter(args[x]));
-				for(int y=0;y<fileStorage.size();y++)writer.write(fileStorage.get(y)+'-');
+				BufferedWriter writer=new BufferedWriter(/*(!en)?*/new FileWriter(args[x])/*:new OutputStreamWriter(new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(args[x]))))*/);
+				for(int y=0;y<fileStorage.size();y++) {
+					line=fileStorage.get(y);
+					if(en&&y<fileStorage.size()-1&&!fileStorage.get(y).contains("ln"))writer.write(line+'-');
+					else if(fileStorage.get(y).contains("ln"))writer.newLine();
+					else writer.write(line);
+				}
 				writer. close();
 			}catch(IOException e){
+				System.err.println(e);
+				System.out.println("No File found. Switching to String mode.");
 				if(en){
 					for(int count=0;count<args[x].length();count++){
 						System.out.print(encrypt(args[x].charAt(count),args[1],nums[2].toString()));
 						if(count<args[x].length()-1)System.out.print('-');
 					}
-				}
-				else System.out.print(decrypt(args[x],args[1],nums[2].toString()));
+				}else System.out.print(decrypt(args[x],args[1],nums[2].toString()));
 			}
 		}
 	}
@@ -102,7 +127,7 @@ public class RSA{
 			System.out.print("Public Key:"+publicKey.toString());
 			BigInteger privateKey= publicKey.modInverse(nums[3]);
 			while(check(privateKey))publicKey.modInverse(nums[3]);
-			System.out.print(" Private Key:"+privateKey.toString());
+			System.out.print(" Private Key:"+privateKey.toString()+"\n");
 		}
 		private boolean check(BigInteger num){
 			return (num.compareTo(nums[3])>=0||num.compareTo(BigInteger.ONE)<=0)||!coPrime(nums[3],num);
@@ -122,8 +147,9 @@ public class RSA{
 		return (new BigInteger(String.valueOf(msg).getBytes())).modPow(new BigInteger(publicKey),new BigInteger(modulus)).toString();
 	}
 	private static String decrypt(String[]cipher,String privateKey,String modulus){
-		for(int x=1;cipher.length>x;x++){
-			cipher[0]+=decrypt(cipher[x],privateKey,modulus);
+		for(int x=0;cipher.length>x;x++){
+			if(x>0)cipher[0]+=decrypt(cipher[x],privateKey,modulus);
+			else cipher[0]=""+decrypt(cipher[x],privateKey,modulus);
 		}
 		return cipher[0];
 	}
