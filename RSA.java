@@ -1,9 +1,7 @@
 import java.security.SecureRandom;
-import java.lang.Thread;
 import java.util.ArrayList;
 import java.util.Scanner;
 import java.math.BigInteger;
-import java.lang.InterruptedException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -42,7 +40,7 @@ public class RSA{
             boolean quit=false;
             while(!quit){
                 if(args[0].toLowerCase().contains("keys")){
-                    THREADS.add((Thread)(new MakeKeys()));
+                    THREADS.add(new Thread((new MakeKeys())));
                     THREADS.get(THREADS.size()-1).start();
                     try{
                         THREADS.get(THREADS.size()-1).join();
@@ -150,7 +148,7 @@ public class RSA{
         }
     }
     
-    private static class CryptoMethod implements Runnable{
+    protected static class CryptoMethod implements Runnable{
         private static String[] args;
         private static int x;
         private static boolean en;
@@ -194,19 +192,26 @@ public class RSA{
        }
     }
     
-    private static class MakeKeys extends Thread{
+    protected static class MakeKeys implements Runnable{
+        private String[] keys=new String[2];
+        public MakeKeys(){
+        }
         @Override
         public void run(){
             BigInteger publicKey=(new BigInteger(NUMS[3].bitLength(),new SecureRandom())).abs();
             while(check(publicKey))publicKey=(new BigInteger(NUMS[3].bitLength(),(new SecureRandom()))).abs();
-            System.out.print("Public Key:"+publicKey.toString());
+            System.out.print("Public Key:"+(keys[0]=publicKey.toString()));
             BigInteger privateKey= publicKey.modInverse(NUMS[3]);
             while(check(privateKey))publicKey.modInverse(NUMS[3]);
-            System.out.print(" Private Key:"+privateKey.toString()+"\n");
+            System.out.print(" Private Key:"+(keys[1]=privateKey.toString())+"\n");
         }
         
         private boolean check(BigInteger num){
             return (num.compareTo(NUMS[3])>=0||num.compareTo(BigInteger.ONE)<=0)||!coPrime(NUMS[3],num);
+        }
+        
+        public String[] getKeys(){
+            return keys;
         }
     }
     //Main method
