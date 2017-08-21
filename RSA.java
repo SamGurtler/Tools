@@ -26,15 +26,12 @@ public class RSA{
     //{big prime,big prime,modulus,totient of modulus}
     private static final BigInteger[] NUMS = {new BigInteger("15805993460899067323"),new BigInteger("9382304296585360981"),
     new BigInteger("148296640359993439204927582798176323863"),new BigInteger("148296640359993439179739285040691895560")};
-    
     private static class menu implements Runnable{
         private static final int BUFFER=2048;
         private static String[] args;
-        
         public menu(String[] args){
                 this.args=ghettofix(args);
         }
-        
         @Override
         public void run(){
             boolean quit=false;
@@ -137,7 +134,6 @@ public class RSA{
                 if(!quit)args=ghettofix(getInput("Option:").split(COMMANDPATTERN,-1));
             }
         }
-        
         private static String[] ghettofix(String[] args){
             for(int count=0;count<args.length;count++){
                     if(args[count].charAt(0)=='"'&& args[count].charAt(args[count].length()-1)=='"'){
@@ -147,18 +143,15 @@ public class RSA{
             return args;
         }
     }
-    
     protected static class CryptoMethod implements Runnable{
         private static String[] args;
         private static int x;
         private static boolean en;
-        
         public CryptoMethod(String[]args,int x,boolean en){
             CryptoMethod.args=args;
             CryptoMethod.x=x;
             CryptoMethod.en=en;
-        }
-        
+        }   
         @Override
         public void run(){
             try{
@@ -191,7 +184,6 @@ public class RSA{
             }
        }
     }
-    
     protected static class MakeKeys implements Runnable{
         private String[] keys=new String[2];
         public MakeKeys(){
@@ -205,11 +197,9 @@ public class RSA{
             while(check(privateKey))publicKey.modInverse(NUMS[3]);
             System.out.print(" Private Key:"+(keys[1]=privateKey.toString())+"\n");
         }
-        
         private boolean check(BigInteger num){
             return (num.compareTo(NUMS[3])>=0||num.compareTo(BigInteger.ONE)<=0)||!coPrime(NUMS[3],num);
-        }
-        
+        }   
         public String[] getKeys(){
             return keys;
         }
@@ -225,7 +215,6 @@ public class RSA{
     private static boolean coPrime(BigInteger a,BigInteger b){
         return a.gcd(b).equals(BigInteger.ONE);
     }
-    
     private static String[] encrypt(String msg,String publicKey,String modulus){
         String[] cipher=new String[msg.length()];
         for(int x=0;msg.length()>x;x++){
@@ -237,7 +226,6 @@ public class RSA{
     private static String encrypt(char msg,String publicKey,String modulus){
         return (new BigInteger(String.valueOf(msg).getBytes())).modPow(new BigInteger(publicKey),new BigInteger(modulus)).toString();
     }
-    
     private static String decrypt(String[]cipher,String privateKey,String modulus){
         for(int x=0;cipher.length>x;x++){
             if(x>0)cipher[0]+=decrypt(cipher[x],privateKey,modulus);
@@ -249,12 +237,10 @@ public class RSA{
     private static char decrypt(String cipher,String privateKey,String modulus){
         return new String(new BigInteger(cipher).modPow(new BigInteger(privateKey),new BigInteger(modulus)).toByteArray()).charAt(0);
     }
-    
     private static String getInput(String quote){
         System.out.print(quote);
         return (new Scanner(System.in)).nextLine();
     }
-    
     private static void getHelp(){
         System.out.println("Separate all input arguments with spaces.");
         System.out.println("Enter any of the following:\nEn for to encrypt(with public key before files and or Strings),");
