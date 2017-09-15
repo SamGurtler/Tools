@@ -1,11 +1,11 @@
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Hashtable;
 import java.util.ResourceBundle;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import javax.swing.filechooser.FileSystemView;
+import javafx.embed.swing.SwingFXUtils;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -16,7 +16,9 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
-import javafx.scene.input.InputMethodEvent;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.image.WritableImage;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -32,18 +34,59 @@ public class MenuController implements Initializable{
     @FXML
     private TextField prInput;
     @FXML 
-    private TreeView showFile;
+    private TreeView<String> showFile;
     @FXML
     private ProgressBar progressBar;
-    private long num=0L;
-    private boolean en,zipMode=true;
-    private List<String> filePaths=new ArrayList<String>();
-    private TreeItem<String> root=new TreeItem<String>("Files and Folders");
+    /*Variable num is for future implementation of various sized keys*/
+    @SuppressWarnings("unused")
+	private long num=0L;
+    @SuppressWarnings("unused")
+	private boolean en,zipMode=true;
+    private Hashtable<String, TreeFileItem> filePaths=new Hashtable<String,TreeFileItem>();
+    /*	Need to make method for finding TreeFileItem's children and 
+     * to check TreeFileItem's children verus saved data in HashTable.
+  	 */
+    //Could be more stable so that if file doesn't exit, it won't cause an error.
+    public static class TreeFileItem extends TreeItem<String>{
+    	/**PATH will be the file's absolute path*/
+    	private final String PATH;
+    	private final boolean FILE,ROOT;
+    	/**File must exist*/
+    	public TreeFileItem(File f) {
+    		super(f.getName(),getFileIcon(f));
+    		PATH=f.getAbsolutePath();
+    		FILE=f.isFile();
+    		ROOT=false;
+    	}
+    	public TreeFileItem(String rootName) {
+    		super(rootName);
+    		ROOT=true;
+    		FILE=false;
+    		PATH="This is just the root, no file repesentation.";
+    	}
+    	public String getPath() {
+    		return PATH;
+    	}
+    	public boolean isFile() {
+    		return FILE;
+    	}
+    	public boolean isRoot() {
+    		return ROOT;
+    	}
+    	public static ImageView getFileIcon(File f) {
+        	BufferedImage tmpBImg= ((BufferedImage) ((javax.swing.ImageIcon) FileSystemView.getFileSystemView().getSystemIcon(f)).getImage());
+        	Image tmpImage= SwingFXUtils.toFXImage(tmpBImg,new WritableImage(tmpBImg.getWidth(),tmpBImg.getHeight()));
+        	return new ImageView(tmpImage);
+        }
+    }
+    private TreeFileItem root=new TreeFileItem("Files and Folders");
     @FXML
     public void en(ActionEvent event){
+    	en=true;
     }
     @FXML
     public void de(ActionEvent event){
+    	en=false;
     }
     public void makeKeys(){
         boolean cancel = false;
@@ -69,11 +112,9 @@ public class MenuController implements Initializable{
             makeKeys();
     }
     @FXML
-    public void send(InputMethodEvent event){
-    }
-    @FXML
     public void start(ActionEvent event){
     }
+    /**Current implementation will cause logic error if file uses local folder icon*/
     @FXML
     public void add(ActionEvent event) {
     	FXMLLoader loader=new FXMLLoader(getClass().getResource("./fFOptions.fxml"));
@@ -84,57 +125,82 @@ public class MenuController implements Initializable{
             Stage optionStage=new Stage();
             optionStage.setScene(new Scene(vBox));
             optionStage.showAndWait();
+            TreeFileItem root=(TreeFileItem) showFile.getSelectionModel().getSelectedItem();
+            if(root==null)root=this.root;
+            else if(root.FILE)root=(TreeFileItem) root.getParent();
             for(File f:CntrllrVBx.getFiles()){
-            	if(f.isDirectory())root.getChildren().add(listFilesAndFilesSubDirectories(f,filePaths,zipMode));
-            	else{
-            		filePaths.add(zipMode?f.getName():f.getAbsolutePath());
-            		root.getChildren().add(new TreeItem<String>(zipMode?f.getName():f.getAbsolutePath()));
+            	if(f.isDirectory()) {
+            		TreeFileItem tmp =listFilesAndFilesSubDirectories(f,filePaths,zipMode);
+            		if(this.root==null&&root==null)root=tmp;
+            		root.getChildren().add(tmp);
+            	}
+            	else if(!filePaths.containsKey(f.getAbsolutePath())) {
+        			filePaths.put(f.getAbsolutePath(), new TreeFileItem(f));
+        			if(root==null)System.out.println("Not implemented yet.");
+        			else root.getChildren().add(filePaths.get(f.getAbsolutePath()));
             	}
             }
-            if(CntrllrVBx.getFiles()!=null)filePaths.add("$End$");
-            treeUpdate();
-        } catch (IOException ex) {
-            Logger.getLogger(MenuController.class.getName()).log(Level.INFO, null, ex);
+            if(this.root==null)treeUpdate(this.root=root);
+            else treeUpdate();
+        } catch (NullPointerException | IOException ex) {
+            ex.printStackTrace();
         }
     }
-    public TreeItem<String> listFilesAndFilesSubDirectories(File directory,List<String> filePaths){
+    public TreeFileItem listFilesAndFilesSubDirectories(File directory,Hashtable<String,TreeFileItem> filePaths){
     	return listFilesAndFilesSubDirectories(directory,filePaths,false);
     }
-    public TreeItem<String> listFilesAndFilesSubDirectories(File directory,List<String> filePaths,boolean zipMode){
-    	filePaths.add(zipMode?directory.getName():directory.getAbsolutePath());
-    	TreeItem<String> branch=new TreeItem<String>(zipMode?directory.getName():directory.getAbsolutePath());
+    public TreeFileItem listFilesAndFilesSubDirectories(File directory,Hashtable<String, TreeFileItem> filePaths,boolean zipMode){
+    	TreeFileItem branch=filePaths.containsKey(directory.getAbsolutePath())?null:new TreeFileItem(directory);
         File[] fList=directory.listFiles();
         for(File f:fList){
-            if(f.isFile()){
-            	filePaths.add(f.getName());
-            	branch.getChildren().add(new TreeItem<String>(zipMode?f.getName():f.getAbsolutePath()));
-            }else if(f.isDirectory()){
-                branch.getChildren().add(listFilesAndFilesSubDirectories(f,filePaths,zipMode));
-            }
+        	if(!filePaths.containsKey(f.getAbsolutePath())) {
+	        	if(f.isFile()) {
+	        		filePaths.put(f.getAbsolutePath(),new TreeFileItem(f));
+	    			branch.getChildren().add(filePaths.get(f.getAbsolutePath()));
+	    		}
+	    		else if(f.isDirectory())branch.getChildren().add(listFilesAndFilesSubDirectories(f,filePaths,zipMode));
+        	}
+        	else if(fList==null);
         }
-        filePaths.add("$End$");
+        if(!filePaths.containsKey(directory.getAbsolutePath()))filePaths.put(directory.getAbsolutePath(),branch);
         return branch;
     }
-    private void treeUpdate() {
+    private void treeUpdate(TreeFileItem root) {
     	showFile.setRoot(root);
     }
+    private void treeUpdate() {
+    	treeUpdate(this.root);
+    }
+    /*private ImageView getFileIcon(File f) {
+    	BufferedImage tmpBImg= ((BufferedImage) ((javax.swing.ImageIcon) FileSystemView.getFileSystemView().getSystemIcon(f)).getImage());
+    	Image tmpImage= SwingFXUtils.toFXImage(tmpBImg,new WritableImage(tmpBImg.getWidth(),tmpBImg.getHeight()));
+    	return new ImageView(tmpImage);
+    }*/
+    //Need to make this remove data from HashTable as well.
     @FXML
     public void remove(ActionEvent event) {
     	try{
-    		TreeItem tmp=(TreeItem) showFile.getSelectionModel().getSelectedItem();
-    		if(tmp!=null)tmp.getParent().getChildren().remove(tmp);
+    		TreeFileItem tmp=(TreeFileItem) showFile.getSelectionModel().getSelectedItem();
+    		if(tmp.getParent()==null)tmp.getChildren().clear();
+    		else if(tmp!=null)tmp.getParent().getChildren().remove(tmp);
     	}catch(NullPointerException e){
     		
     	}
     }
     @FXML
     public void setZipMode(ActionEvent event){
+    	//Make GUI that ask are you sure
+    	/**This will remove all current files listed*/
     	zipMode=!zipMode;
+    	filePaths=new Hashtable<String,TreeFileItem>();
+    	showFile.getRoot().getChildren().removeAll(showFile.getRoot().getChildren());
     }
     @Override
     public void initialize(URL location, ResourceBundle resources){
-        root.setExpanded(true);
-    	showFile.setRoot(root);
+    	if(root!=null) {
+    		root.setExpanded(true);
+    		showFile.setRoot(root);
+    	}
         makeKeys();
     }
 }
