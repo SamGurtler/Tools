@@ -1,4 +1,3 @@
-# Goto Crypt\sg\cryptography
-## Important:
-##  *MainController & *RSA.
+# *Important: ##Goto Crypt\sg\cryptography
+## /*MainController & /*RSA.
 ### Main is irrelevant
