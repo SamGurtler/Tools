@@ -1,3 +1,3 @@
-# Important: ##Goto Crypt\sg\cryptography
-## MainController & RSA.
+# Important:
+## View MainController & RSA.
 ### Main is irrelevant
