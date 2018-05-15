@@ -1,32 +1,40 @@
 package sg.cryptography;
-import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.Scanner;
-import java.math.BigInteger;
-import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.FileInputStream;
+import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.math.BigInteger;
+import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Scanner;
 import java.util.zip.Adler32;
 import java.util.zip.CheckedInputStream;
 import java.util.zip.CheckedOutputStream;
-import java.util.zip.ZipOutputStream;
-import java.util.zip.ZipInputStream;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 public class RSA{
-    private static final ArrayList<Thread> THREADS=new ArrayList<Thread>();
+    /** This is a use of a Textbook RSA Cryptography *without padding* */
+	private static final ArrayList<Thread> THREADS=new ArrayList<Thread>();
     //Copied regex from stack overflow that partially works.
     private static final String COMMANDPATTERN=" (?=(?:[^\"]*\"([^\"]*)\")*[^\"]*$)";
     //{big prime,big prime,modulus,totient of modulus}
     private static final BigInteger[] NUMS = {new BigInteger("15805993460899067323"),new BigInteger("9382304296585360981"),
     new BigInteger("148296640359993439204927582798176323863"),new BigInteger("148296640359993439179739285040691895560")};
+    //Main method
+    public static void main(String[] args)throws InterruptedException{
+        if(args.length<1){
+        	getHelp();
+            (new Thread(new menu(getInput("Option:").split(COMMANDPATTERN,-1)))).start();
+        }else(new Thread(new menu(args[0].split(COMMANDPATTERN,-1)))).start();
+    }
     private static class menu implements Runnable{
         private static final int BUFFER=2048;
         private static String[] args;
@@ -37,7 +45,7 @@ public class RSA{
         public void run(){
             boolean quit=false;
             while(!quit){
-                if(args[0].toLowerCase().contains("keys")){
+                 if(args[0].toLowerCase().contains("keys")){
                     THREADS.add(new Thread((new MakeKeys())));
                     THREADS.get(THREADS.size()-1).start();
                     try{
@@ -47,7 +55,7 @@ public class RSA{
                         System.err.print(e);
                     }
                 }else if(args[0].toLowerCase().contains("en")){
-                    int y=THREADS.size()-1;
+                    int y=Math.max(0,THREADS.size()-1);
                     File tmp;
                     ArrayList<File> toBeZipped= new ArrayList<>();
                     for(int x=2;x<args.length;x++){
@@ -63,27 +71,33 @@ public class RSA{
                             System.err.println(e);
                         }
                     }
-                    BufferedInputStream origin = null;
-                    byte data[] = new byte[BUFFER];
-                    for(int x=0;((tmp=new File("ENCRYPT_GROUP"+x+".zip")).exists());x++)System.out.print("\r"+x);
-                    try{
-                        CheckedOutputStream checksum = new CheckedOutputStream(new FileOutputStream(tmp), new Adler32());
-                        try(ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(checksum))){
-                            out.setLevel(9);
-                            for(int x=0;x<toBeZipped.size();x++){
-                                origin=new BufferedInputStream(new FileInputStream(toBeZipped.get(x)),BUFFER);
-                                ZipEntry entry = new ZipEntry(toBeZipped.get(x).getPath());
-                                out.putNextEntry(entry);
-                                int count;
-                                while((count = origin.read(data,0,BUFFER))!=-1){
-                                    out.write(data, 0, count);
-                                }
-                                origin.close();
-                            }
-                            for(File f:toBeZipped)f.delete();
-                        }
-                    }catch(IOException e){
-                        System.err.println(e);
+                    //If there wasn't any files found in arguments
+                    if(!toBeZipped.isEmpty()) {
+                    	BufferedInputStream origin = null;
+                        byte data[] = new byte[BUFFER];
+                    	//Finds a place to put encrypted files
+                        for(int x=0;((tmp=new File("ENCRYPT_GROUP"+x+".zip")).exists());x++)System.out.print("\r"+x);
+                        System.out.println("Created:"+tmp);
+	                    try{
+	                        CheckedOutputStream checksum = new CheckedOutputStream(new FileOutputStream(tmp), new Adler32());
+	                        try(ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(checksum))){
+	                            out.setLevel(9);
+	                            for(int x=0;x<toBeZipped.size();x++){
+	                                origin=new BufferedInputStream(new FileInputStream(toBeZipped.get(x)),BUFFER);
+	                                ZipEntry entry = new ZipEntry(toBeZipped.get(x).getPath());
+	                                out.putNextEntry(entry);
+	                                int count;
+	                                while((count = origin.read(data,0,BUFFER))!=-1){
+	                                    out.write(data, 0, count);
+	                                }
+	                                origin.close();
+	                               System.out.println("Zipped:"+toBeZipped.get(x));
+	                            }
+	                            for(File f:toBeZipped)f.delete();
+	                        }
+	                    }catch(IOException e){
+	                        System.err.println(e);
+	                    }
                     }
                 }else if(args[0].toLowerCase().contains("de")){
                     //Need to make compatible with zip.
@@ -118,9 +132,9 @@ public class RSA{
                             f.delete();
                         }catch(IOException e){
                             System.err.println(e);
-                        }   
+                        }
                     }
-                    args=(String[])editedArgs.toArray();
+                    args=editedArgs.toArray(new String[editedArgs.size()]);
                     for(int x=2;x<args.length;x++){
                         THREADS.add(new Thread(new CryptoMethod(args,x,false)));
                         THREADS.get(THREADS.size()-1).run();
@@ -159,84 +173,68 @@ public class RSA{
                 ArrayList<String> fileStorage=new ArrayList<>();
                 String line;
                 try (BufferedReader reader = new BufferedReader(new FileReader(args[x]))) {
+                	System.out.println("Orignial "+args[x]);
                     while((line=reader.readLine())!=null){
-                        String[] info = (en)?encrypt(line,args[1],NUMS[2].toString()):new String[]{decrypt(line.split("-"),args[1],NUMS[2].toString())};
-                        fileStorage.addAll(Arrays.asList(info));
-                        fileStorage.add("ln");
+                    	System.out.println(line);
+                    	if(en)line+="\n";
+                    	line= en?encrypt(line,args[1],NUMS[2].toString()):decrypt(line,args[1],NUMS[2].toString());
+                    	fileStorage.add(line);
                     }
                 }
                 try (BufferedWriter writer = new BufferedWriter(new FileWriter(args[x]))) {
-                    for(int y=0;y<fileStorage.size();y++) {
-                        line=fileStorage.get(y);
-                        if(en&&y<fileStorage.size()-1&&!fileStorage.get(y).contains("ln"))writer.write(line+'-');
-                        else if(fileStorage.get(y).contains("ln"))writer.newLine();
-                        else writer.write(line);
-                    }
+                	System.out.println(en?"Encrypted":"Decrypted"+"file:"+args[x]);
+                    for(String s:fileStorage) {
+                    	writer.write(s);
+                    	writer.newLine();
+                    	System.out.println(s);
+                    }                	
                 }
             }catch(IOException e){
-                System.err.println(e);
-                System.out.println("No File found. Switching to String mode.");
-                if(en){
-                    for(int count=0;count<args[x].length();count++){
-                        System.out.print(encrypt(args[x].charAt(count),args[1],NUMS[2].toString()));
-                        if(count<args[x].length()-1)System.out.print('-');
-                    }
-                }else System.out.print(decrypt(args[x],args[1],NUMS[2].toString()));
+                System.err.println(e.getMessage());
+                System.out.println("File not found. Switching to String mode.");
+                if(en)System.out.println(encrypt(args[x],args[1],NUMS[2].toString()));  
+                else System.out.println(decrypt(args[x],args[1],NUMS[2].toString()));
             }
        }
     }
     protected static class MakeKeys implements Runnable{
-        private String[] keys=new String[2];
+        private final String[] KEYS;
         public MakeKeys(){
+        	KEYS=new String[2];
         }
         @Override
         public void run(){
             BigInteger publicKey=(new BigInteger(NUMS[3].bitLength(),new SecureRandom())).abs();
             while(check(publicKey))publicKey=(new BigInteger(NUMS[3].bitLength(),(new SecureRandom()))).abs();
-            System.out.print("Public Key:"+(keys[0]=publicKey.toString()));
+            System.out.print("Public Key:"+(KEYS[0]=publicKey.toString()));
             BigInteger privateKey= publicKey.modInverse(NUMS[3]);
-            while(check(privateKey))publicKey.modInverse(NUMS[3]);
-            System.out.print(" Private Key:"+(keys[1]=privateKey.toString())+"\n");
+            while(check(privateKey))privateKey=publicKey.modInverse(NUMS[3]);
+            System.out.print(" Private Key:"+(KEYS[1]=privateKey.toString())+"\n");
         }
-        private boolean check(BigInteger num){
-            return (num.compareTo(NUMS[3])>=0||num.compareTo(BigInteger.ONE)<=0)||!coPrime(NUMS[3],num);
+        /**
+         * @param num is intended to be a potential key for RSA algorithm.
+         * @return true if num is not coprime and less than the totient of modulus.
+         * Returns true if num is the opposite of what is required.
+         */
+        private static boolean check(BigInteger num){
+        	return (num.compareTo(NUMS[3])>=0||num.compareTo(BigInteger.ONE)<=0)||!coPrime(NUMS[3],num);
         }   
         public String[] getKeys(){
-            return keys;
+            for(String key:KEYS)if(key==null)throw new NullPointerException("Keys not made yet."); 
+        	return KEYS;
         }
-    }
-    //Main method
-    public static void main(String[] args)throws InterruptedException{
-        if(args.length<1){
-            getHelp();
-            (new Thread(new menu(getInput("Option:").split(COMMANDPATTERN,-1)))).start();
-        }else(new Thread(new menu(args[0].split(COMMANDPATTERN,-1)))).start();
     }
     //This is a fundamental method.
     private static boolean coPrime(BigInteger a,BigInteger b){
         return a.gcd(b).equals(BigInteger.ONE);
     }
-    private static String[] encrypt(String msg,String publicKey,String modulus){
-        String[] cipher=new String[msg.length()];
-        for(int x=0;msg.length()>x;x++){
-            cipher[x] = encrypt(msg.charAt(x),publicKey,modulus);
-        }
-        return cipher;
-    }
     //This is a fundamental method
-    private static String encrypt(char msg,String publicKey,String modulus){
-        return (new BigInteger(String.valueOf(msg).getBytes())).modPow(new BigInteger(publicKey),new BigInteger(modulus)).toString();
-    }
-    private static String decrypt(String[]cipher,String privateKey,String modulus){
-        for(int x=0;cipher.length>x;x++){
-            if(x>0)cipher[0]+=decrypt(cipher[x],privateKey,modulus);
-            else cipher[0]=""+decrypt(cipher[x],privateKey,modulus);
-        }
-        return cipher[0];
+    public final static String encrypt(String msg,String publicKey,String modulus){
+        return (new BigInteger(msg.getBytes())).modPow(new BigInteger(publicKey),new BigInteger(modulus)).toString();
     }
     //This is a fundamental method.
-    private static char decrypt(String cipher,String privateKey,String modulus){
-        return new String(new BigInteger(cipher).modPow(new BigInteger(privateKey),new BigInteger(modulus)).toByteArray()).charAt(0);
+    public final static String decrypt(String cipher,String privateKey,String modulus){
+        return new String(new BigInteger(cipher).modPow(new BigInteger(privateKey),new BigInteger(modulus)).toByteArray());
     }
     private static String getInput(String quote){
         System.out.print(quote);
@@ -248,4 +246,5 @@ public class RSA{
         System.out.print("De to decrypt(with private key before files and or Strings),\nOr Keys for new keys");
         System.out.print(";followed by String or File's path names that will be used.\nFor examples type ex or type quit to exit.\n");
     }
+    static{System.out.println("@author Sam Gurtler");}
 }
