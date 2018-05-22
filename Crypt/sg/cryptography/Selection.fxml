@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.*?>
+<?import javafx.scene.effect.*?>
+<?import java.lang.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+
+<fx:root fx:id="stackPane" alignment="BASELINE_CENTER" maxHeight="-Infinity" maxWidth="-Infinity" snapToPixel="false" type="StackPane" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1" fx:controller="Selector">
+   <children>
+      <ScrollPane fx:id="selectionPane" fitToHeight="true" fitToWidth="true" nodeOrientation="LEFT_TO_RIGHT" pannable="true" prefHeight="800.0" prefWidth="598.0" VBox.vgrow="ALWAYS">
+         <content>
+            <TreeTableView fx:id="showTree" minHeight="-Infinity" minWidth="-Infinity" tableMenuButtonVisible="true" />
+         </content>
+         <effect>
+            <Reflection />
+         </effect>
+      </ScrollPane>
+   </children>
+   <effect>
+      <InnerShadow />
+   </effect>
+</fx:root>

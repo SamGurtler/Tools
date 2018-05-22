@@ -13,14 +13,9 @@ public class CryptoZip extends Application {
         FXMLLoader loader=new FXMLLoader(getClass().getResource("./Menu.fxml"));
         Parent root;
         Scene scene;
-		try {
-			MenuController controller=loader.getController();
-			root = (VBox)loader.load();
-			scene = new Scene((VBox)root,1250,917);
-		} catch (IOException e) {
-			e.printStackTrace();
-			scene = new Scene((root=(Parent)(new Pane())),1250,917);
-		}
+		//MenuController controller=loader.getController();
+		//root = (VBox)loader.load();
+		scene = new Scene(new MenuController()/*(VBox)root*/,1250,917);
         primaryStage.setTitle("Cryptographic Compresser");
         primaryStage.setScene(scene);
         primaryStage.show();

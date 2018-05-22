@@ -13,12 +13,13 @@ public class FFOptionsController {
                 @FXML 
                 private VBox vBox;
                 private boolean en;
-                private List<File> chosen=new ArrayList<File>();
+                private List<File> chosen;
                 public FFOptionsController() {
-                	
+                	this(true);
                 }
                 public FFOptionsController(boolean en) {
                 	this.en=en;
+                	chosen=new ArrayList<File>();
                 }
                 @FXML 
                 private void DChooser(ActionEvent event) {
@@ -26,7 +27,8 @@ public class FFOptionsController {
                 		Stage fFStage=(Stage)vBox.getScene().getWindow();
                 		fFStage.hide();
                 		DirectoryChooser dirC=new DirectoryChooser();
-                        chosen.add(dirC.showDialog(fFStage));
+                        File f=dirC.showDialog(fFStage);
+                		if(f!=null)chosen.add(f);
                         fFStage.close();
     	            });
                 }
@@ -36,7 +38,8 @@ public class FFOptionsController {
                 		Stage fFStage=(Stage)vBox.getScene().getWindow();
                 		fFStage.hide();
                 		FileChooser fileC=new FileChooser();
-                        chosen=fileC.showOpenMultipleDialog(fFStage);
+                		List<File> f=fileC.showOpenMultipleDialog(fFStage);
+                		if(f!=null)chosen.addAll(f);
                         fFStage.close();
     	            });
                 }

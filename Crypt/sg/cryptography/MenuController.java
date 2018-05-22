@@ -3,18 +3,25 @@ package sg.cryptography;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.Set;
+import java.util.Stack;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
 import java.util.function.BinaryOperator;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -22,12 +29,17 @@ import java.util.stream.Collectors;
 import javax.swing.filechooser.FileSystemView;
 
 import javafx.application.Platform;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.Property;
+import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.property.ReadOnlyProperty;
 import javafx.collections.ObservableList;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.MenuItem;
@@ -74,11 +86,10 @@ public class MenuController extends VBox implements Initializable {
 	private ContextMenu fileOptioner;
 	private boolean obstruction = false, en = true, zipMode = true;
 	private Stage obstructingStage = null;
-	//private Hashtable<String, TreeFileItem> filePaths = new Hashtable<String, TreeFileItem>();
-	private InnerClass3<String,Path,TreeFileItem,Map<Path,TreeFileItem>> mess=new InnerClass3<String,Path,TreeFileItem,Map<Path,TreeFileItem>>(new Hashtable<>(),altNewLeaf);
+	private InnerClass3<String, File, Item<File,String>, Set<File>> mess = new InnerClass3<String, File,Item<File,String>, Set<File>>(
+			new HashSet(), altNewLeaf); 
 	// Could be more stable so that if file doesn't exit, it won't cause an error.
 	public MenuController() {
-		// super();
 		try {
 			FXMLLoader fxmlLoader = new FXMLLoader(getClass().getResource("Menu.fxml"));
 			fxmlLoader.setController(this);
@@ -89,31 +100,22 @@ public class MenuController extends VBox implements Initializable {
 		}
 	}
 
-	protected static class TreeFileItem extends TreeItem<String> {
-		/** PATH will be the file's absolute path */
-		private final Path PATH;
+	protected abstract static class Item<E,V> extends TreeItem<V> {
+		private final ReadOnlyProperty<E> PATH;
 		private final boolean FILE, ROOT;
-		/** File must exist */
-		public TreeFileItem(File f) {
-			this(f,true);
-			if (!FILE)this.setExpanded(true);
-		}
-		private TreeFileItem(String text,File f) {
-			super(text,getFileIcon(f));
-			PATH=f.toPath();
-			FILE=f.isFile();
+		protected Item(V f,Node n,E e,Predicate<E> isFile) {
+			super(f,n);
+			PATH=new ReadOnlyObjectWrapper<E>(e);
+			FILE=isFile.test(e);
 			ROOT=false;
 		}
-		public TreeFileItem(File f, boolean zipMode) {
-			this(zipMode ? f.getName() : f.getAbsolutePath(),f);
-		}
-		public TreeFileItem(String rootName) {
+		protected Item(V rootName) {
 			super(rootName);
 			ROOT = true;
 			FILE = false;
 			PATH = null;
 		}
-		public Path getPath() {
+		public ReadOnlyProperty<E> getPath() {
 			return PATH;
 		}
 
@@ -123,6 +125,21 @@ public class MenuController extends VBox implements Initializable {
 
 		public boolean isRoot() {
 			return ROOT;
+		}
+	}
+	private static class TreeFileItem extends Item<File,String> {
+		public TreeFileItem(File f) {
+			this(f,true);
+		}
+		public TreeFileItem(File f, boolean zipMode) {
+			this(zipMode ? f.getName() : f.getAbsolutePath(),f);
+			if (!super.FILE)this.setExpanded(true);
+		}
+		private TreeFileItem(String text,File f) {
+			super(text,(Node)getFileIcon(f),f,(File ff)->ff.isFile());
+		}
+		public TreeFileItem(String rootName) {
+			super(rootName);
 		}
 		public static ImageView getFileIcon(File f) {
 			BufferedImage tmpBImg = ((BufferedImage) ((javax.swing.ImageIcon) FileSystemView.getFileSystemView()
@@ -190,101 +207,129 @@ public class MenuController extends VBox implements Initializable {
 				obstructingStage.toFront();
 	}
 	
-	private static class InnerClass<E,K,V extends TreeItem<E>,M extends Map<K,V>>{
-		private final M map;
-		public InnerClass(M map) {
-			this.map=map;
+	private abstract static class InnerClass<E,K,V extends TreeItem<E>,S extends Set<K>>{
+		private final S set;
+		protected InnerClass(S arg) {
+			this.set=arg;
 		}
-		public static <V>boolean hereIsEnd(V here,V end){
+		private static <V>boolean hereIsEnd(V here,V end){
 			return here.equals(end);
 		}
-		public static <E,V extends TreeItem<E>>boolean branchContains(V parent,V child) {
-			return parent.getChildren().filtered(sib->child.getValue().equals(sib.getValue())).size()>0;
+		private static <E,V extends TreeItem<E>>boolean branchContains(V parent,V child) {
+			return parent.getChildren().filtered(sib->sib.getValue().equals(child.getValue())).size()>0;
 		}
-		public boolean hasBeenAdded(K f){
-			return map.containsKey(f);
-		}
-		public void addToHash(V item,K f) {
-			map.put(f,item);
-		}
-		public static <E,T extends TreeItem<E>> T addToBranch(T parent,T child){
+		private static <E,T extends TreeItem<E>> void addToBranch(T parent,T child){
 			parent.getChildren().add(child);
-			return child;
 		}
-		public void add(V branch,V newLeaf,K file,Function<V,V> altNewLeaf) {
+		protected boolean hasBeenAdded(K f){
+			return set.contains(f);
+		}
+		protected void addToHash(K f) {
+			set.add(f);
+		}
+		protected abstract V altNewLeaf(V leaf);
+		public void add(V branch,V newLeaf,K file) {
+			add(branch,newLeaf,file,this::altNewLeaf,InnerClass::addToBranch,this::addToHash,this::hasBeenAdded,InnerClass::branchContains);
+		}
+		private void add(V branch,V newLeaf,K file,Function<V,V> altNewLeaf) {
 			add(branch,newLeaf,file,altNewLeaf,InnerClass::addToBranch,this::addToHash,this::hasBeenAdded,InnerClass::branchContains);
 		}
 		/*generic method intended for different types of TreeItems*/
-		public static <U,K> void add(U branch,U newLeaf,K file,Function<U,U> altNewLeaf,BinaryOperator<U> addToBranch,BiConsumer<U,K> addToHash, Predicate<K> hasBeenAdded,BiPredicate<U,U> branchContains) {
-			if(hasBeenAdded.negate().test(file))add(branch,newLeaf,file,altNewLeaf,addToBranch,addToHash,branchContains);
+		public static <U,K> void add(U branch,U newLeaf,K file,Function<U,U> altNewLeaf,BiConsumer<U,U> addToBranch,Consumer<K> addToSet, Predicate<K> hasBeenAdded,BiPredicate<U,U> branchContains) {
+			if(hasBeenAdded.negate().test(file))add(branch,newLeaf,file,altNewLeaf,addToBranch,addToSet,branchContains);
 		}
 		/*generic method intended for different types of TreeItems*/
-		public static <U,K> void add(U branch,U newLeaf,K file,Function<U,U> altNewLeaf,BinaryOperator<U> addToBranch,BiConsumer<U,K> addToHash,BiPredicate<U,U> branchContains) {
+		public static <U,K> void add(U branch,U newLeaf,K file,Function<U,U> altNewLeaf,BiConsumer<U,U> addToBranch,Consumer<K> addToSet,BiPredicate<U,U> branchContains) {
 			if(branchContains.negate().test(branch,newLeaf)) {
-				U attachedLeaf=addToBranch.apply(branch,newLeaf);
-				addToHash.accept(attachedLeaf, file);
-			}else add(branch,altNewLeaf.apply(newLeaf),file,altNewLeaf,addToBranch,addToHash,branchContains);
+				addToBranch.accept(branch,newLeaf);
+				addToSet.accept(file);
+			}else add(branch,altNewLeaf.apply(newLeaf),file,altNewLeaf,addToBranch,addToSet,branchContains);
 		}
-		@SuppressWarnings("unchecked")
-		public void remove(V item,Function<V,K> key) {
+		public void fullRemove(V internal,Function<V,K> key) {
+			V parent=(V) internal.getParent();
+			removeSubTFromHash(internal,key);
+			if(parent==null)internal.getChildren().clear();
+			else parent.getChildren().remove(internal);
+		}
+		private void removeSubTFromHash(V tmp2,Function<V,K> key) {
 			V tmp;
-			if(item.getParent()!=null)removeLeaf(item,key);
-			for (TreeItem<E> tFI : item.getChildren()) {
+			if(tmp2.getParent()!=null)removeLeaf(tmp2,key);
+			for (TreeItem<E> tFI : tmp2.getChildren()) {
 				tmp=(V)tFI;
-				if (!tmp.isLeaf()&&tmp.getParent()!=null)remove(tmp,key);
-				removeLeaf(tmp,key);
-			}
+				if (!tmp.isLeaf())removeSubTFromHash(tmp,key);
+				else removeLeaf(tmp,key);
+				}
 		}
 		private void removeLeaf(V leaf,Function<V,K> key) {
-			map.remove(key.apply(leaf));
+			set.remove(key.apply(leaf));
 		}
 		public void clear() {
-			map.clear();
+			set.clear();
 		}
+		@Override
+		public String toString() {
+			StringBuilder builder = new StringBuilder();
+			builder.append(this.getClass().getName()+" [map=").append(set).append("]");
+			return builder.toString();
+		}
+		
 	}
 	//make leaf only inner class
-	private static class InnerClass2<E,K,V extends TreeItem<E>,M extends Map<K,V>> extends InnerClass<E,K,V,M>{
-		public void add(V branch,V newLeaf,K file,Function<V,V> altNewLeaf) {
-			if(newLeaf.isLeaf())super.add(branch, newLeaf, file, altNewLeaf);
+	private static abstract class InnerClass2<E,K,V extends TreeItem<E>,M extends Set<K>> extends InnerClass<E,K,V,M>{
+		public final void add(V branch,V newLeaf,K file) {
+			if(newLeaf.isLeaf())super.add(branch, newLeaf, file);
+			else throw new IllegalArgumentException(this.getClass().getName()+": Invalid newLeaf has children.");
 		}
-		public InnerClass2(M map) {
+		protected InnerClass2(M map) {
 			super(map);
 		}
 	}
-	private static class InnerClass3<E,K,V extends TreeItem<E>,M extends Map<K,V>> extends InnerClass2<E,K,V,M>{
+	protected static class InnerClass3<E,K,V extends TreeItem<E>,M extends Set<K>> extends InnerClass2<E,K,V,M>{
 		private Function<V,V> altNewLeaf;
 		public InnerClass3(M map,Function<V,V> altNewLeaf) {
 			super(map);
 			this.altNewLeaf=altNewLeaf;
 		}
-		public void add(V branch,V newLeaf,K file) {
-			super.add(branch, newLeaf, file, altNewLeaf);
+		@Override
+		protected V altNewLeaf(V leaf) {
+			return altNewLeaf.apply(leaf);
+		}
+		public void add(V branch,V newLeaf,K file,Function<V,V> altNewLeaf) {
+			Function<V,V> tmp=this.altNewLeaf;
+			this.altNewLeaf=altNewLeaf;
+			add(branch,newLeaf,file);
+			this.altNewLeaf=tmp;
 		}
 	}
-	
-	private static Function<TreeFileItem,TreeFileItem> altNewLeaf = (item)-> {item.setValue((String)item.getValue()+"'");return item;};
+
+	private static Function<Item<File, String>, Item<File, String>> altNewLeaf = (item)-> {item.setValue(item.getValue()+"*");return item;};
 	//need to account for when root is null but branch is not.
 	private TreeFileItem add(TreeFileItem branch,File f,boolean toBeZipped) {
 		TreeFileItem result=branch;
-		if(result==null&&showFile.getRoot()==null) throw new NullPointerException("Nothing to add to.");
-		else if(result==null&&showFile.getRoot()!=null)result=add((TreeFileItem)showFile.getRoot(),f,toBeZipped);
-		else if(branch.isFile())add((TreeFileItem)branch.getParent(),f,toBeZipped);
-		else {
+		if(result!=null&&!result.isFile()){
 			BiFunction<TreeFileItem,File,TreeFileItem> addType;
 			if(toBeZipped) {
 				addType= (TreeFileItem t, File file)->{
-					TreeFileItem newBranch= new TreeFileItem(file,toBeZipped); 
-					t.getChildren().add(newBranch);
-					return newBranch;
+					TreeItem<String> newBranch= new TreeFileItem(file,toBeZipped);
+					final ObjectProperty<String> tmp =newBranch.valueProperty();
+					//
+					if(t.getChildren().stream().anyMatch(l->l.getValue().equals(tmp.getValue()))) {
+						newBranch=t.getChildren().stream().filter((TreeItem<String> l)->!l.isLeaf()&&l.valueProperty().isEqualTo(tmp).getValue()).findFirst().get();
+					}
+					else if(t.valueProperty().isNotEqualTo(newBranch.valueProperty()).getValue())t.getChildren().add(newBranch);
+					else newBranch=t;
+					return (TreeFileItem) newBranch;
 				};
 			}else addType=(TreeFileItem t, File file)->t;
 			addAll(result,f,toBeZipped,addType);
-			}
+		}else if(result!=null)add((TreeFileItem)branch.getParent(),f,toBeZipped);
+		else if(showFile.getRoot()!=null) result=add((TreeFileItem)showFile.getRoot(),f,toBeZipped);
+		else throw new NullPointerException("Nothing to add to."); 
 		return result;
 	}
 	private void addAll(TreeFileItem branch, File f,boolean toBeZipped,BiFunction<TreeFileItem,File,TreeFileItem> addType) {
 		if(f.isDirectory()) {
-			File[] files=f.listFiles();
+			File[] files=Arrays.stream(f.listFiles()).filter(((Predicate<File>)mess::hasBeenAdded).negate()).toArray(File[]::new);
 			if(files.length>0) {
 				TreeFileItem tmpBranch=addType.apply(branch, f);
 				for(File subf : files)addAll(tmpBranch,subf,toBeZipped,addType);
@@ -292,7 +337,7 @@ public class MenuController extends VBox implements Initializable {
 		}else if(f.isFile())shortAdd(branch,f);
 	}
 	private void shortAdd(TreeFileItem branch,File file) {		
-		mess.add(branch,new TreeFileItem(file,zipMode),file.toPath());
+		mess.add(branch,new TreeFileItem(file,zipMode),file);
 	}
 
 	private static <T> LinkedList<T> getPath(T node,T finalNode,Function<T,T> traverse){
@@ -313,8 +358,6 @@ public class MenuController extends VBox implements Initializable {
 		if(finished.negate().test(nextNode, finalNode))return getPath(nextNode,finalNode,traverse,whatIsAdded,finished,list);
 		else return list;
 	}
-	
-	//private static Function<T extends TreeItem<T>>
 	
 	@FXML
 	public void add(ActionEvent event) {
@@ -355,17 +398,8 @@ public class MenuController extends VBox implements Initializable {
 					obstructingStage.setAlwaysOnTop(true);
 					obstructingStage.showAndWait();
 					showFile.setVisible(true);
-					TreeFileItem treeItem = zipMode ? (TreeFileItem) showFile.getSelectionModel().getSelectedItem()
-							: root;
-					if (treeItem == null)
-						treeItem = root;
-					else if (treeItem.FILE)
-						treeItem = (TreeFileItem) treeItem.getParent();
-					for (File f : CntrllrVBx.getFiles())add(treeItem,f,zipMode);
-					if (root == null)
-						treeUpdate(root = treeItem);
-					else
-						treeUpdate();
+					TreeFileItem treeItem = zipMode ? (TreeFileItem) showFile.getSelectionModel().getSelectedItem(): root;
+					for(File f : CntrllrVBx.getFiles())add(treeItem,f,zipMode);
 				}
 			} catch (NullPointerException | IOException ex) {
 				ex.printStackTrace();
@@ -374,32 +408,17 @@ public class MenuController extends VBox implements Initializable {
 		} else
 			obstructingStage.toFront();
 	}
-	
-	private void treeUpdate(TreeFileItem root) {
-		showFile.setRoot(root);
-	}
 
-	private void treeUpdate() {
-		treeUpdate(root);
-	}
-	
-	private static Path getKey(TreeFileItem item) {
-		return item.getPath();
+	private static <T> T getKey(Item<T,?> item) {
+		return (T) item.getPath().getValue();
 	}
 	@FXML
 	public void remove(ActionEvent event) {
 		if (!obstruction) {
 			try {
-				for (TreeFileItem tmp : reverse(fixSelect(showFile.getSelectionModel().getSelectedItems()))) {
+				for (Item tmp : reverse(fixSelect(TreeFileItem.class,showFile.getSelectionModel().getSelectedItems()))) {
 					showFile.getSelectionModel().clearSelection();
-					if (tmp.equals(showFile.getRoot())) {
-						mess.remove(tmp,MenuController::getKey);
-						//for(TreeItem<String> t: tmp.getChildren())mess.remove((TreeFileItem) t,MenuController::getKey);
-						tmp.getChildren().clear();
-					} else if (tmp != null) {
-						mess.remove(tmp,MenuController::getKey);
-						tmp.getParent().getChildren().remove(tmp);
-					}
+					mess.fullRemove(tmp,MenuController::getKey);
 				}
 				showFile.getSelectionModel().clearSelection();
 			} catch (NullPointerException e) {
@@ -420,18 +439,16 @@ public class MenuController extends VBox implements Initializable {
 		showFile.getRoot().getChildren().removeAll(showFile.getRoot().getChildren());
 	}
 
-	private <E> List<E> reverse(List<E> l) {
-		E tmp;
-		for (int x = l.size() - 1; x > -1; x--) {
-			tmp = l.get(x);
-			l.remove(tmp);
-			l.add(tmp);
-		}
+	private <E,T extends Collection<E>> T reverse(T l) {
+		Stack<E> filo=new Stack<>();
+		for(E t:l)filo.add(t);
+		l.clear();
+		while(filo.isEmpty()==false)l.add(filo.pop());
 		return l;
 	}
 
-	private List<TreeFileItem> fixSelect(ObservableList<TreeItem<String>> l) {
-		return l.stream().map(f -> (TreeFileItem) f)
+	private <E,T extends TreeItem<E>> List<T> fixSelect(Class<T> t,ObservableList<? super T> l) {
+		return l.stream().map(t::cast)
 				.sorted((f, d) -> showFile.getTreeItemLevel(f) - showFile.getTreeItemLevel(d))
 				.collect(Collectors.toList());
 	}
@@ -452,10 +469,10 @@ public class MenuController extends VBox implements Initializable {
 			 * Need to make method for ordering of selected items that includes
 			 * lexicographical order before sorting TreeItem level.
 			 */
-			for (TreeFileItem tri : fixSelect(showFile.getSelectionModel().getSelectedItems())) {
+			for (TreeFileItem tri : fixSelect(TreeFileItem.class,showFile.getSelectionModel().getSelectedItems())) {
 				try {
 					if (!tri.isRoot()) {
-						// tmptri.setExpanded(false);
+
 						movingPool.add(tri);
 						canContinue = true;
 						TreeFileItem tmptrI = (TreeFileItem) tri.getParent();
@@ -471,7 +488,7 @@ public class MenuController extends VBox implements Initializable {
 				} catch (NullPointerException n) {
 					n.printStackTrace();
 				}
-			}
+			} 
 			if (canContinue) {
 				showFile.getSelectionModel().clearSelection();
 				showFile.getContextMenu().getItems().remove(tmp);
@@ -482,7 +499,7 @@ public class MenuController extends VBox implements Initializable {
 		tmp2.setOnAction(e -> {
 			showFile.getContextMenu().getItems().remove(tmp2);
 			TreeFileItem tmpTreeFileItem = (TreeFileItem) showFile.getSelectionModel().getSelectedItem();
-			if (!tmpTreeFileItem.FILE)
+			if (!tmpTreeFileItem.isFile())
 				tmpTreeFileItem.getChildren().addAll(movingPool);
 			else
 				tmpTreeFileItem.getParent().getChildren().addAll(movingPool);
