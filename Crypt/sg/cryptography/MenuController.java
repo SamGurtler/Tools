@@ -24,6 +24,7 @@ import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import javax.swing.filechooser.FileSystemView;
@@ -216,7 +217,7 @@ public class MenuController extends VBox implements Initializable {
 			return here.equals(end);
 		}
 		private static <E,V extends TreeItem<E>>boolean branchContains(V parent,V child) {
-			return parent.getChildren().filtered(sib->sib.getValue().equals(child.getValue())).size()>0;
+			return parent.getChildren().stream().anyMatch(l->l.getValue().equals(child.getValue()));
 		}
 		private static <E,T extends TreeItem<E>> void addToBranch(T parent,T child){
 			parent.getChildren().add(child);
@@ -301,25 +302,23 @@ public class MenuController extends VBox implements Initializable {
 			this.altNewLeaf=tmp;
 		}
 	}
-
 	private static Function<Item<File, String>, Item<File, String>> altNewLeaf = (item)-> {item.setValue(item.getValue()+"*");return item;};
+	private static <E,M extends TreeItem<E>> M mergeAdd(M parent,Supplier<M> child){
+		TreeItem<E> newBranch= child.get();
+		final ObjectProperty<E> tmp =newBranch.valueProperty();
+		if(InnerClass.branchContains(parent,newBranch))
+			newBranch=parent.getChildren().stream().filter((TreeItem<E> l)->!l.isLeaf()&&l.valueProperty().isEqualTo(tmp).getValue()).findFirst().get();
+		else if(parent.valueProperty().isNotEqualTo(newBranch.valueProperty()).getValue())parent.getChildren().add(newBranch);
+		//else newBranch=parent;
+		return (M) newBranch;
+	}
 	//need to account for when root is null but branch is not.
 	private TreeFileItem add(TreeFileItem branch,File f,boolean toBeZipped) {
 		TreeFileItem result=branch;
 		if(result!=null&&!result.isFile()){
 			BiFunction<TreeFileItem,File,TreeFileItem> addType;
 			if(toBeZipped) {
-				addType= (TreeFileItem t, File file)->{
-					TreeItem<String> newBranch= new TreeFileItem(file,toBeZipped);
-					final ObjectProperty<String> tmp =newBranch.valueProperty();
-					//
-					if(t.getChildren().stream().anyMatch(l->l.getValue().equals(tmp.getValue()))) {
-						newBranch=t.getChildren().stream().filter((TreeItem<String> l)->!l.isLeaf()&&l.valueProperty().isEqualTo(tmp).getValue()).findFirst().get();
-					}
-					else if(t.valueProperty().isNotEqualTo(newBranch.valueProperty()).getValue())t.getChildren().add(newBranch);
-					else newBranch=t;
-					return (TreeFileItem) newBranch;
-				};
+				addType= (TreeFileItem t, File file)->mergeAdd(t,()->new TreeFileItem(file,toBeZipped));
 			}else addType=(TreeFileItem t, File file)->t;
 			addAll(result,f,toBeZipped,addType);
 		}else if(result!=null)add((TreeFileItem)branch.getParent(),f,toBeZipped);
@@ -340,23 +339,22 @@ public class MenuController extends VBox implements Initializable {
 		mess.add(branch,new TreeFileItem(file,zipMode),file);
 	}
 
-	private static <T> LinkedList<T> getPath(T node,T finalNode,Function<T,T> traverse){
-		return getPath(node,finalNode,traverse,Function.identity(),InnerClass::hereIsEnd);
+	private static <U> LinkedList<U> getPath(U node,U finalNode,Function<U,U> traverse){
+		return getPath(node, traverse, Function.identity(), (Predicate<U>)finalNode::equals);
 	}
-	private static <T> LinkedList<T> getPath(T node,T finalNode,Function<T,T> traverse,BiPredicate<T,T> finished){
-		return getPath(node,finalNode,traverse,Function.identity(),finished);
+	private static <T> LinkedList<T> getPath(T node,Function<T,T> traverse,Predicate<T> finished){
+		return getPath(node,traverse,Function.identity(),finished);
 	}
 	private static <U,R> LinkedList<R> getPath(U node,U finalNode,Function<U,U> traverse,Function<U,R>whatIsAdded){
-		return getPath(node,finalNode,traverse,whatIsAdded,InnerClass::hereIsEnd);
+		return getPath(node,traverse,whatIsAdded,finalNode::equals);
 	}
-	private static <U,R> LinkedList<R> getPath(U node,U finalNode,Function<U,U> traverse,Function<U,R>whatIsAdded,BiPredicate<U,U> finished){
-		return getPath(node,finalNode,traverse,whatIsAdded,finished,new LinkedList<R>());
+	private static <U,R> LinkedList<R> getPath(U node,Function<U,U> traverse,Function<U,R>whatIsAdded,Predicate<U> finished){
+		return getPath(node,traverse,whatIsAdded,finished,new LinkedList<R>());
 	}
-	private static <U,R> LinkedList<R> getPath(U node,U finalNode,Function<U,U> traverse,Function<U,R>whatIsAdded,BiPredicate<U,U> finished,LinkedList<R> list){
+	private static <U,R> LinkedList<R> getPath(U node,Function<U,U> traverse,Function<U,R>whatIsAdded,Predicate<U> finished, LinkedList<R> list){
 		list.add(whatIsAdded.apply(node));
-		U nextNode=traverse.apply(node);
-		if(finished.negate().test(nextNode, finalNode))return getPath(nextNode,finalNode,traverse,whatIsAdded,finished,list);
-		else return list;
+		if(finished.negate().test(node))list=getPath(traverse.apply(node),traverse, whatIsAdded, finished,list);
+		return list;
 	}
 	
 	@FXML
@@ -367,9 +365,12 @@ public class MenuController extends VBox implements Initializable {
 			try {
 				showFile.setVisible(false);
 				if (zipMode && showFile.getSelectionModel().getSelectedItems().size() > 1) {
-					TreeFileItem absurdism = new TreeFileItem("Select One");
-					absurdism.getChildren().addAll(showFile.getSelectionModel().getSelectedItems());
-					
+					TreeItem<String> absurdism = new TreeItem<>("Select One");
+					absurdism.getChildren().addAll(showFile.getSelectionModel().getSelectedItems().stream().map(i->{
+						//Use mergeAdd to utilize TreeView properly instead of implementing like ListView. 
+						//mergeAdd()
+						return new TreeItem<String>(reverse(getPath(i,(TreeItem<String>)root,(child)->child.getParent(),(ii->ii.getValue()))).stream().reduce((a,b)->a+"/"+b).get());
+						}).toArray(TreeItem[]::new));
 					TreeView<String> absurdity = new TreeView<>(absurdism);
 					absurdity.setShowRoot(false);
 					ScrollPane absurd = new ScrollPane(absurdity);
