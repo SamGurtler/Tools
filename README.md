@@ -1,3 +1,2 @@
-## View MainController & RSA
-^Inside folders^
-## Main is irrelevant!
+
+## Only Main is relevant!
