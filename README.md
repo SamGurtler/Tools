@@ -1,2 +1,2 @@
 
-## Only Tools/Crypt/sg/cryptography/RSA.java is relevant!
+## Only Crypt/sg/cryptography/RSA.java is relevant!
